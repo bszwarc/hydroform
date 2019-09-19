@@ -58,9 +58,11 @@ const gcpClusterTemplate string = `
   }
 `
 
+// Terraform implements Operator
 type Terraform struct {
 }
 
+// Create provisions a new cluster.
 func (t *Terraform) Create(providerType types.ProviderType, configuration map[string]interface{}) (*types.ClusterInfo, error) {
 	platform, err := t.newPlatform(providerType, configuration)
 	if err != nil {
@@ -97,6 +99,7 @@ func (t *Terraform) Create(providerType types.ProviderType, configuration map[st
 	}, nil
 }
 
+// Delete deprovisions an existing cluster.
 func (t *Terraform) Delete(state *types.InternalState, providerType types.ProviderType, configuration map[string]interface{}) error {
 	platform, err := t.newPlatform(providerType, configuration)
 	if err != nil {
@@ -105,6 +108,10 @@ func (t *Terraform) Delete(state *types.InternalState, providerType types.Provid
 
 	_, err = platform.Apply(state.TerraformState, true)
 	return errors.Wrap(err, "unable to deprovision cluster")
+}
+
+func newTerraform() Operator {
+	return &Terraform{}
 }
 
 func (t *Terraform) newPlatform(providerType types.ProviderType, configuration map[string]interface{}) (*terraformClient.Platform, error) {

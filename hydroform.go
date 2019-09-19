@@ -8,8 +8,9 @@ import (
 	"github.com/kyma-incubator/hydroform/types"
 )
 
-const provisionOperator = operator.TerraformOperator
+const provisioningOperator = operator.TerraformOperator
 
+// Provisioner is the generic hydroform interface for the provisioners.
 type Provisioner interface {
 	Provision(cluster *types.Cluster, provider *types.Provider) (*types.Cluster, error)
 	Status(cluster *types.Cluster, provider *types.Provider) (*types.ClusterStatus, error)
@@ -17,10 +18,11 @@ type Provisioner interface {
 	Deprovision(cluster *types.Cluster, provider *types.Provider) error
 }
 
+// Provision requests provisioning of a new cluster with the given configuration on the given provider.
 func Provision(cluster *types.Cluster, provider *types.Provider) (*types.Cluster, error) {
 	switch provider.Type {
 	case types.GCP:
-		return newGCPProvisioner(provisionOperator).Provision(cluster, provider)
+		return newGCPProvisioner(provisioningOperator).Provision(cluster, provider)
 	case types.AWS:
 		return nil, errors.New("aws not supported yet")
 	case types.Azure:
@@ -30,10 +32,11 @@ func Provision(cluster *types.Cluster, provider *types.Provider) (*types.Cluster
 	}
 }
 
+// Status returns the ClusterStatus for the requested cluster.
 func Status(cluster *types.Cluster, provider *types.Provider) (*types.ClusterStatus, error) {
 	switch provider.Type {
 	case types.GCP:
-		return newGCPProvisioner(provisionOperator).Status(cluster, provider)
+		return newGCPProvisioner(provisioningOperator).Status(cluster, provider)
 	case types.AWS:
 		return nil, errors.New("aws not supported yet")
 	case types.Azure:
@@ -43,10 +46,11 @@ func Status(cluster *types.Cluster, provider *types.Provider) (*types.ClusterSta
 	}
 }
 
+// Credentials returns the Kubeconfig file as a byte array for the requested cluster.
 func Credentials(cluster *types.Cluster, provider *types.Provider) ([]byte, error) {
 	switch provider.Type {
 	case types.GCP:
-		return newGCPProvisioner(provisionOperator).Credentials(cluster, provider)
+		return newGCPProvisioner(provisioningOperator).Credentials(cluster, provider)
 	case types.AWS:
 		return nil, errors.New("aws not supported yet")
 	case types.Azure:
@@ -56,10 +60,11 @@ func Credentials(cluster *types.Cluster, provider *types.Provider) ([]byte, erro
 	}
 }
 
+// Deprovision requests deprovisioning of the given cluster on the given provider.
 func Deprovision(cluster *types.Cluster, provider *types.Provider) error {
 	switch provider.Type {
 	case types.GCP:
-		return newGCPProvisioner(provisionOperator).Deprovision(cluster, provider)
+		return newGCPProvisioner(provisioningOperator).Deprovision(cluster, provider)
 	case types.AWS:
 		return errors.New("aws not supported yet")
 	case types.Azure:
@@ -69,14 +74,14 @@ func Deprovision(cluster *types.Cluster, provider *types.Provider) error {
 	}
 }
 
-func newGCPProvisioner(operatorType operator.OperatorType) Provisioner {
+func newGCPProvisioner(operatorType operator.Type) Provisioner {
 	return gcp.New(operatorType)
 }
 
-func newAWSProvisioner(operatorType operator.OperatorType) Provisioner {
+func newAWSProvisioner(operatorType operator.Type) Provisioner {
 	return nil
 }
 
-func newAzureProvisioner(operatorType operator.OperatorType) Provisioner {
+func newAzureProvisioner(operatorType operator.Type) Provisioner {
 	return nil
 }

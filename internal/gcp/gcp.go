@@ -15,25 +15,18 @@ import (
 
 var mandatoryConfigFields = []string{}
 
-type gcpProvider struct {
+// gcpProvisioner implements Provisioner
+type gcpProvisioner struct {
 	provisionOperator operator.Operator
 }
 
-func (g *gcpProvider) validateProvider(provider *types.Provider) bool {
-	for _, field := range mandatoryConfigFields {
-		if _, ok := provider.CustomConfigurations[field]; !ok {
-			return false
-		}
-	}
-	return true
-}
-
-func (g *gcpProvider) Provision(cluster *types.Cluster, provider *types.Provider) (*types.Cluster, error) {
+// Provision requests provisioning of a new Kubernetes cluster on GCP with the given configurations.
+func (g *gcpProvisioner) Provision(cluster *types.Cluster, provider *types.Provider) (*types.Cluster, error) {
 	if !g.validateProvider(provider) {
 		return nil, errors.New("incomplete provider information")
 	}
 
-	config := loadConfigurations(cluster, provider)
+	config := g.loadConfigurations(cluster, provider)
 
 	clusterInfo, err := g.provisionOperator.Create(provider.Type, config)
 	if err != nil {
@@ -44,7 +37,8 @@ func (g *gcpProvider) Provision(cluster *types.Cluster, provider *types.Provider
 	return cluster, nil
 }
 
-func (g *gcpProvider) Status(cluster *types.Cluster, provider *types.Provider) (*types.ClusterStatus, error) {
+// Status returns the ClusterStatus for the requested cluster.
+func (g *gcpProvisioner) Status(cluster *types.Cluster, provider *types.Provider) (*types.ClusterStatus, error) {
 	containerClient, err := container.NewClient(context.Background(),
 		provider.ProjectName,
 		option.WithCredentialsFile(provider.CredentialsFilePath))
@@ -57,11 +51,12 @@ func (g *gcpProvider) Status(cluster *types.Cluster, provider *types.Provider) (
 	}
 
 	return &types.ClusterStatus{
-		Phase: convertGCPStatus(cl.Status),
+		Phase: g.convertGCPStatus(cl.Status),
 	}, nil
 }
 
-func (g *gcpProvider) Credentials(cluster *types.Cluster, provider *types.Provider) ([]byte, error) {
+// Credentials returns the Kubeconfig file as a byte array for the requested cluster.
+func (g *gcpProvisioner) Credentials(cluster *types.Cluster, provider *types.Provider) ([]byte, error) {
 	userName := "cluster-user"
 	config := api.NewConfig()
 
@@ -86,12 +81,13 @@ func (g *gcpProvider) Credentials(cluster *types.Cluster, provider *types.Provid
 	return clientcmd.Write(*config)
 }
 
-func (g *gcpProvider) Deprovision(cluster *types.Cluster, provider *types.Provider) error {
+// Deprovision requests deprovisioning of an existing cluster on GCP with the given configurations.
+func (g *gcpProvisioner) Deprovision(cluster *types.Cluster, provider *types.Provider) error {
 	if !g.validateProvider(provider) {
 		return errors.New("incomplete provider information")
 	}
 
-	config := loadConfigurations(cluster, provider)
+	config := g.loadConfigurations(cluster, provider)
 
 	err := g.provisionOperator.Delete(cluster.ClusterInfo.InternalState, provider.Type, config)
 	if err != nil {
@@ -101,7 +97,8 @@ func (g *gcpProvider) Deprovision(cluster *types.Cluster, provider *types.Provid
 	return nil
 }
 
-func New(operatorType operator.OperatorType) *gcpProvider {
+// New creates a new instance of gcpProvisioner.
+func New(operatorType operator.Type) *gcpProvisioner {
 	var op operator.Operator
 
 	switch operatorType {
@@ -111,12 +108,21 @@ func New(operatorType operator.OperatorType) *gcpProvider {
 		op = &operator.Unknown{}
 	}
 
-	return &gcpProvider{
+	return &gcpProvisioner{
 		provisionOperator: op,
 	}
 }
 
-func loadConfigurations(cluster *types.Cluster, provider *types.Provider) map[string]interface{} {
+func (g *gcpProvisioner) validateProvider(provider *types.Provider) bool {
+	for _, field := range mandatoryConfigFields {
+		if _, ok := provider.CustomConfigurations[field]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func (g *gcpProvisioner) loadConfigurations(cluster *types.Cluster, provider *types.Provider) map[string]interface{} {
 	config := map[string]interface{}{}
 	config["cluster_name"] = cluster.Name
 	config["node_count"] = cluster.NodeCount
@@ -142,7 +148,7 @@ func loadConfigurations(cluster *types.Cluster, provider *types.Provider) map[st
 //   "ERROR" - indicates the cluster may be unusable.
 //   "DEGRADED" - indicates the cluster requires user action to restore full functionality.
 // More details can be found in the `statusMessage` field.
-func convertGCPStatus(status container.Status) types.Phase {
+func (g *gcpProvisioner) convertGCPStatus(status container.Status) types.Phase {
 	switch status {
 	default:
 		return types.Unknown
