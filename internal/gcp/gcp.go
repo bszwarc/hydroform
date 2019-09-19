@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"cloud.google.com/go/container"
 	"github.com/kyma-incubator/hydroform/internal/operator"
@@ -13,7 +14,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 )
 
-var mandatoryConfigFields = []string{}
+const errCannotBeEmpty = "\n - %s cannot be empty"
+const errCannotBeLess = "\n - %s cannot be less than %v"
+const errCustom = "\n - %v"
 
 // gcpProvisioner implements Provisioner
 type gcpProvisioner struct {
@@ -22,8 +25,8 @@ type gcpProvisioner struct {
 
 // Provision requests provisioning of a new Kubernetes cluster on GCP with the given configurations.
 func (g *gcpProvisioner) Provision(cluster *types.Cluster, provider *types.Provider) (*types.Cluster, error) {
-	if !g.validateProvider(provider) {
-		return nil, errors.New("incomplete provider information")
+	if err := g.validateInputs(cluster, provider); err != nil {
+		return nil, err
 	}
 
 	config := g.loadConfigurations(cluster, provider)
@@ -39,6 +42,10 @@ func (g *gcpProvisioner) Provision(cluster *types.Cluster, provider *types.Provi
 
 // Status returns the ClusterStatus for the requested cluster.
 func (g *gcpProvisioner) Status(cluster *types.Cluster, provider *types.Provider) (*types.ClusterStatus, error) {
+  if err := g.validateInputs(cluster, provider); err != nil {
+		return nil, err
+	}
+
 	containerClient, err := container.NewClient(context.Background(),
 		provider.ProjectName,
 		option.WithCredentialsFile(provider.CredentialsFilePath))
@@ -57,6 +64,10 @@ func (g *gcpProvisioner) Status(cluster *types.Cluster, provider *types.Provider
 
 // Credentials returns the Kubeconfig file as a byte array for the requested cluster.
 func (g *gcpProvisioner) Credentials(cluster *types.Cluster, provider *types.Provider) ([]byte, error) {
+  if err := g.validateInputs(cluster, provider); err != nil {
+		return nil, err
+	}
+
 	userName := "cluster-user"
 	config := api.NewConfig()
 
@@ -83,8 +94,8 @@ func (g *gcpProvisioner) Credentials(cluster *types.Cluster, provider *types.Pro
 
 // Deprovision requests deprovisioning of an existing cluster on GCP with the given configurations.
 func (g *gcpProvisioner) Deprovision(cluster *types.Cluster, provider *types.Provider) error {
-	if !g.validateProvider(provider) {
-		return errors.New("incomplete provider information")
+	if err := g.validateInputs(cluster, provider); err != nil {
+		return err
 	}
 
 	config := g.loadConfigurations(cluster, provider)
@@ -113,13 +124,41 @@ func New(operatorType operator.Type) *gcpProvisioner {
 	}
 }
 
-func (g *gcpProvisioner) validateProvider(provider *types.Provider) bool {
-	for _, field := range mandatoryConfigFields {
-		if _, ok := provider.CustomConfigurations[field]; !ok {
-			return false
-		}
+func (g *gcpProvisioner) validateInputs(cluster *types.Cluster, provider *types.Provider) error {
+	var errMessage string
+	if cluster.NodeCount < 1 {
+		errMessage += fmt.Sprintf(errCannotBeLess, "Cluster.NodeCount", 1)
 	}
-	return true
+	// Matches the regex for a GCP cluster name.
+	if match, _ := regexp.MatchString(`^(?:[a-z](?:[-a-z0-9]{0,37}[a-z0-9])?)$`, cluster.Name); !match {
+		errMessage += fmt.Sprintf(errCustom, "Cluster.Name must start with a lowercase letter followed by up to 39 lowercase letters, "+
+			"numbers, or hyphens, and cannot end with a hyphen")
+	}
+	if cluster.Location == "" {
+		errMessage += fmt.Sprintf(errCannotBeEmpty, "Cluster.Location")
+	}
+	if cluster.MachineType == "" {
+		errMessage += fmt.Sprintf(errCannotBeEmpty, "Cluster.MachineType")
+	}
+	if cluster.KubernetesVersion == "" {
+		errMessage += fmt.Sprintf(errCannotBeEmpty, "Cluster.KubernetesVersion")
+	}
+	if cluster.DiskSizeGB < 0 {
+		errMessage += fmt.Sprintf(errCannotBeLess, "Cluster.DiskSizeGB", 0)
+	}
+
+	if provider.CredentialsFilePath == "" {
+		errMessage += fmt.Sprintf(errCannotBeEmpty, "Provider.CredentialsFilePath")
+	}
+	if provider.ProjectName == "" {
+		errMessage += fmt.Sprintf(errCannotBeEmpty, "Provider.ProjectName")
+	}
+
+	if errMessage != "" {
+		return errors.New("input validation failed with the following information: " + errMessage)
+	}
+
+	return nil
 }
 
 func (g *gcpProvisioner) loadConfigurations(cluster *types.Cluster, provider *types.Provider) map[string]interface{} {
