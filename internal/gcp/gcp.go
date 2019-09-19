@@ -42,7 +42,7 @@ func (g *gcpProvisioner) Provision(cluster *types.Cluster, provider *types.Provi
 
 // Status returns the ClusterStatus for the requested cluster.
 func (g *gcpProvisioner) Status(cluster *types.Cluster, provider *types.Provider) (*types.ClusterStatus, error) {
-  if err := g.validateInputs(cluster, provider); err != nil {
+	if err := g.validateInputs(cluster, provider); err != nil {
 		return nil, err
 	}
 
@@ -64,7 +64,7 @@ func (g *gcpProvisioner) Status(cluster *types.Cluster, provider *types.Provider
 
 // Credentials returns the Kubeconfig file as a byte array for the requested cluster.
 func (g *gcpProvisioner) Credentials(cluster *types.Cluster, provider *types.Provider) ([]byte, error) {
-  if err := g.validateInputs(cluster, provider); err != nil {
+	if err := g.validateInputs(cluster, provider); err != nil {
 		return nil, err
 	}
 
